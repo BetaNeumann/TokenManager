@@ -1,0 +1,24 @@
+{
+    "configurations": [
+        {
+            "name": "Python Debugger: Module with Arguments",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "tkmanager",
+            "console": "integratedTerminal",
+            "args": ["store", "-e", "2024-06-22", "KEY", "VALUE"]
+        },
+        {
+            "name": "Python Debugger: Module",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "tkmanager"
+        },
+        {
+            "name": "Python Debugger: Python File",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${file}"
+        },
+    ]
+}
