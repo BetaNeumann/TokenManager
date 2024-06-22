@@ -1,4 +1,4 @@
-from . import cli, _get_name
+from . import cli
 
 
 def main() -> None:
