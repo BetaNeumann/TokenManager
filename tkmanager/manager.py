@@ -16,17 +16,17 @@ FILE = 'TKMANAGER'
 PATH = os.path.join(HOME_DIR, FILE)
 
 
-@dataclass
+@dataclass(init=False)
 class Token:
     t: str
     expires: datetime = field(init=False)
-    expires_: InitVar[str | datetime]
 
 
-    def __post_init__(self, expires_: str | datetime):
-        if isinstance(expires_, str):
-            expires_ = datetime.fromisoformat(expires_)
-        self.expires = expires_
+    def __init__(self, t: str, expires: str | datetime):
+        self.t = t
+        if isinstance(expires, str):
+            expires = datetime.fromisoformat(expires)
+        self.expires = expires
 
 
 class Manager:
@@ -53,8 +53,11 @@ class Manager:
 
 
     def make_file(self) -> None:
-        with open(self._file_location, 'w'):
-            pass
+        with open(self._file_location, 'w+') as file:
+            data = file.read()
+        if data:
+            raise ex.FileOverwriteError("There's already data in this file.")
+        self.store_data({'default': {}})
 
 
     @overload
@@ -84,11 +87,18 @@ class Manager:
     def read_token(self, token_name: str, token_group: str = 'default') -> Token:
         data = self.read_data(False)
         try:
-            token_group = data[token_group]
+            token_group_data: dict[str, dict[str, Any]] = data[token_group]
         except KeyError:
             raise ex.GroupNotFoundError(f"The group '{token_group}' was not found.")
-        raise NotImplementedError()
+        token = Token(**token_group_data[token_name])
+        return token
 
 
-    def store_token(self, token_value: dict[str, Any], token_name: str, token_group: str = 'default') -> None:
-        raise NotImplementedError()
+    def store_token(self, token: Token, token_name: str, token_group: str = 'default') -> None:
+        data = self.read_data(False)
+        try:
+            token_group_data: dict[str, Token] = data[token_group]
+        except KeyError:
+            raise ex.GroupNotFoundError(f"The group '{token_group}' was not found.")
+        token_group_data[token_name] = token
+        self.store_data(data)
