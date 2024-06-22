@@ -7,3 +7,6 @@ class GroupNotFoundError(Exception):
 
 class TokenNotFoundError(Exception):
     """Raised when a token is not found within a group"""
+
+class FileOverwriteError(Exception):
+    """Raised when writing to a file would overwrite existing data"""
