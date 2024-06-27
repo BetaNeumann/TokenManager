@@ -1,7 +1,7 @@
 import os
 from typing import Any, Literal, Optional, overload
+from dataclasses import dataclass, field
 from datetime import datetime
-from dataclasses import InitVar, dataclass, field
 
 import orjson as json
 from cryptography.fernet import Fernet
@@ -16,17 +16,28 @@ FILE = 'TKMANAGER'
 PATH = os.path.join(HOME_DIR, FILE)
 
 
-@dataclass(init=False)
+@dataclass(init=False, repr=False)
 class Token:
-    t: str
-    expires: datetime = field(init=False)
+    t: str = field(repr=False)
+    expires: Optional[datetime]
 
 
-    def __init__(self, t: str, expires: str | datetime):
+    def __init__(self, t: str, expires: str | datetime | None = None):
         self.t = t
         if isinstance(expires, str):
             expires = datetime.fromisoformat(expires)
         self.expires = expires
+    
+    
+    def __repr__(self) -> str:
+        return f"Token(t=***, expires={self.expires.isoformat() if self.expires else None})"
+
+
+    @property
+    def is_expired(self) -> bool:
+        if self.expires:
+            return self.expires <= datetime.now()
+        return False
 
 
 class Manager:
@@ -52,16 +63,20 @@ class Manager:
         return Fernet.generate_key().decode(ENCODING)
 
 
+    def has_file(self) -> bool:
+        return os.path.exists(self._file_location)
+
+
     def make_file(self) -> None:
         with open(self._file_location, 'w+') as file:
             data = file.read()
         if data:
             raise ex.FileOverwriteError("There's already data in this file.")
-        self.store_data({'default': {}})
+        self.store_data({'DEFAULT': {}})
 
 
     @overload
-    def read_data(self, as_bytes: Literal[False]) -> dict[str, Any]: ...
+    def read_data(self, as_bytes: Literal[False] = False) -> dict[str, Any]: ...
     @overload
     def read_data(self, as_bytes: Literal[True]) -> bytes: ...
 
@@ -85,6 +100,8 @@ class Manager:
 
 
     def read_token(self, token_name: str, token_group: str = 'default') -> Token:
+        token_group = token_name.upper()
+        token_name = token_name.lower()
         data = self.read_data(False)
         try:
             token_group_data: dict[str, dict[str, Any]] = data[token_group]
@@ -94,11 +111,24 @@ class Manager:
         return token
 
 
-    def store_token(self, token: Token, token_name: str, token_group: str = 'default') -> None:
+    def store_token(
+        self,
+        token: Token,
+        token_name: str,
+        token_group: str = 'DEFAULT',
+        force: bool = False
+    ) -> None:
+        token_group = token_name.upper()
+        token_name = token_name.lower()
         data = self.read_data(False)
         try:
+            data.setdefault(token_group, {})
             token_group_data: dict[str, Token] = data[token_group]
         except KeyError:
             raise ex.GroupNotFoundError(f"The group '{token_group}' was not found.")
+        
+        if token_name in token_group_data and not force:
+            raise ex.TokenOverwriteError(f"Token '{token_name}' is already defined in group '{token_group}'.")
+
         token_group_data[token_name] = token
         self.store_data(data)
