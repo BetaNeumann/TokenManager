@@ -10,3 +10,6 @@ class TokenNotFoundError(Exception):
 
 class FileOverwriteError(Exception):
     """Raised when writing to a file would overwrite existing data"""
+
+class TokenOverwriteError(Exception):
+    """Raised when trying to store a token would overwrite an existing token"""
