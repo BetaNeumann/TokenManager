@@ -36,6 +36,10 @@ class Token:
 
     def __repr__(self) -> str:
         return f"Token(t=***, expires={self.expires if self.expires else None})"
+    
+    
+    def __str__(self) -> str:
+        return f"{self.t} : {self.expires}" if self.expires else self.t
 
 
     @property
@@ -59,7 +63,8 @@ class Manager:
         return decoded_key.encode(ENCODING)
 
 
-    def has_key(self) -> bool:
+    @classmethod
+    def has_key(cls) -> bool:
         return KEY in os.environ
 
 
@@ -78,7 +83,6 @@ class Manager:
             if data:
                 raise ex.FileOverwriteError("There's already data in this file.")
             file.write(self._encrypter.encrypt(json.dumps({})))
-            file.flush()
 
 
     @overload
@@ -115,6 +119,18 @@ class Manager:
             raise ex.GroupNotFoundError(f"The group '{token_group}' was not found.")
         token = Token(**token_group_data[token_name])
         return token
+    
+    
+    def read_tokens(self) -> dict[str, dict[str, Token]]:
+        return {
+            group: {
+                token_name: Token(**token)
+                for token_name, token
+                in tokens.items()
+            } 
+            for group, tokens
+            in self.read_data().items()
+        }
 
 
     def store_token(
