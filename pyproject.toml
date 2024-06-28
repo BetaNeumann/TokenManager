@@ -14,8 +14,8 @@ dependencies = [
 dynamic = ["version"]
 
 [project.urls]
-github = "https://github.com/StafSis/TokenManager"
-"Bug Tracker" = "https://github.com/StafSis/TokenManager/issues"
+github = "https://github.com/BetaNeumann/TokenManager"
+"Bug Tracker" = "https://github.com/BetaNeumann/TokenManager/issues"
 
 [tool.setuptools.package-dir]
 tkmanager = "tkmanager"
