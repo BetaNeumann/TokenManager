@@ -2,11 +2,12 @@ import os
 from typing import Any, Literal, Optional, overload
 from dataclasses import dataclass, field
 from datetime import datetime
+from time import time
 
 import orjson as json
 from cryptography.fernet import Fernet
 
-from . import exceptions as ex
+from .. import exceptions as ex
 
 
 ENCODING = 'utf-8'
@@ -16,27 +17,31 @@ FILE = 'TKMANAGER'
 PATH = os.path.join(HOME_DIR, FILE)
 
 
+def _now() -> int:
+    return int(time())
+
+
 @dataclass(init=False, repr=False)
 class Token:
     t: str = field(repr=False)
-    expires: Optional[datetime]
+    expires: Optional[int]
 
 
-    def __init__(self, t: str, expires: str | datetime | None = None):
+    def __init__(self, t: str, expires: int | datetime | None = None):
         self.t = t
-        if isinstance(expires, str):
-            expires = datetime.fromisoformat(expires)
+        if isinstance(expires, datetime):
+            expires = int(expires.timestamp())
         self.expires = expires
-    
-    
+
+
     def __repr__(self) -> str:
-        return f"Token(t=***, expires={self.expires.isoformat() if self.expires else None})"
+        return f"Token(t=***, expires={self.expires if self.expires else None})"
 
 
     @property
     def is_expired(self) -> bool:
         if self.expires:
-            return self.expires <= datetime.now()
+            return self.expires <= _now()
         return False
 
 
@@ -68,11 +73,12 @@ class Manager:
 
 
     def make_file(self) -> None:
-        with open(self._file_location, 'w+') as file:
+        with open(self._file_location, 'wb+') as file:
             data = file.read()
-        if data:
-            raise ex.FileOverwriteError("There's already data in this file.")
-        self.store_data({'DEFAULT': {}})
+            if data:
+                raise ex.FileOverwriteError("There's already data in this file.")
+            file.write(self._encrypter.encrypt(json.dumps({})))
+            file.flush()
 
 
     @overload
@@ -100,7 +106,7 @@ class Manager:
 
 
     def read_token(self, token_name: str, token_group: str = 'default') -> Token:
-        token_group = token_name.upper()
+        token_group = token_group.upper()
         token_name = token_name.lower()
         data = self.read_data(False)
         try:
@@ -118,15 +124,13 @@ class Manager:
         token_group: str = 'DEFAULT',
         force: bool = False
     ) -> None:
-        token_group = token_name.upper()
+        token_group = token_group.upper()
         token_name = token_name.lower()
         data = self.read_data(False)
-        try:
-            data.setdefault(token_group, {})
-            token_group_data: dict[str, Token] = data[token_group]
-        except KeyError:
-            raise ex.GroupNotFoundError(f"The group '{token_group}' was not found.")
-        
+
+        data.setdefault(token_group, {})
+        token_group_data: dict[str, Token] = data[token_group]
+
         if token_name in token_group_data and not force:
             raise ex.TokenOverwriteError(f"Token '{token_name}' is already defined in group '{token_group}'.")
 
