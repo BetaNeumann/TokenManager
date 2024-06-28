@@ -1,4 +1,4 @@
-from typing import Optional, Any
+from typing import Optional, Callable, Any
 from typing_extensions import Annotated
 from datetime import datetime
 
@@ -10,7 +10,7 @@ from rich.tree import Tree
 from tkmanager import _get_name, _get_version
 from . import messages as msgs, parsers as parse
 from .. import exceptions as ex
-from ..manager.manager import Manager, Token
+from ..klass.manager import KEY, Manager, Token
 
 
 app = typer.Typer(
@@ -21,7 +21,16 @@ app = typer.Typer(
 )
 
 
-MANAGER = Manager()
+def _manager() -> Callable[[], Manager]:
+    manager = None
+
+    def get_manager() -> Manager:
+        nonlocal manager
+        if manager is None:
+            manager = Manager()
+        return manager
+
+    return get_manager
 
 
 def _version(called: bool) -> None:
@@ -31,6 +40,7 @@ def _version(called: bool) -> None:
 
 
 def _make_file(called: bool) -> None:
+    MANAGER = Manager()
     if called:
         try:
             MANAGER.make_file()
@@ -40,7 +50,20 @@ def _make_file(called: bool) -> None:
         print(f"File was {msgs.SUCCESSFULLY} created!")
 
 
-@app.callback()
+def _make_key(called: bool) -> None:
+    if called:
+        print(
+            f"Save the following encryption key as the enviroment variable '{KEY}':",
+            f"[bold red]{Manager.make_key()}",
+            sep='\n'
+        )
+        raise typer.Exit()
+
+
+GETTER = _manager()
+
+
+@app.callback(context_settings={'obj': _manager()})
 def main(
     version: Annotated[
         bool, typer.Option(
@@ -52,20 +75,36 @@ def main(
     ] = False,
     make_file: Annotated[
         bool, typer.Option(
-            '--make-file', '-m',
+            '--make-file', '-mf',
             help='Create file before execution of command.',
             callback=_make_file,
+            is_eager=True
+        )
+    ] = False,
+    make_key: Annotated[
+        bool, typer.Option(
+            '--make-key', '-mk',
+            help='Create a encryption key.',
+            callback=_make_key,
             is_eager=True
         )
     ] = False
 ) -> None:
     """Manages the safe storage of Tokens!"""
+    MANAGER = GETTER()
+
+    should_abort = False
+    msg: list[str] = []
+
     if not MANAGER.has_file():
-        print(
+        msg += [
             "[red]WARNING! NO FILE FOUND!",
-            "Create a new file with the command [bright_cyan]'tkmanager --make-file'[/bright_cyan].",
-            sep='\n'
-        )
+            "Create a new file with the command [bright_cyan]tkmanager --make-file[/bright_cyan].\n"
+        ]
+        should_abort = True
+
+    if should_abort:
+        print(*msg, sep='\n')
         raise typer.Abort()
 
 
@@ -95,6 +134,8 @@ def store(
         )
     ] = False
 ) -> None:
+    MANAGER = GETTER()
+
     new_token = Token(token, expires)
     MANAGER.store_token(token=new_token, token_name=token_name, token_group=group, force=force)
 
@@ -122,6 +163,8 @@ def read(
         )
     ] = False
 ) -> None:
+    MANAGER = GETTER()
+
     token = MANAGER.read_token(token_name=token_name, token_group=group)
     msg = token.t
     if expires and token.expires:
@@ -145,32 +188,5 @@ def list_(
         )
     ] = False
 ) -> None:
-    def add_token_branches(tree: Tree, tokens: dict[str, Any]) -> None:
-        for token_name, token in sorted(tokens.items()):
-            token_description = f"[red]{token_name}[/red] : [bright_cyan]{token['expires']}" if token['expires']\
-                                else f"[red]{token_name}"
+    MANAGER = GETTER()
 
-            tree.add(token_description)
-
-    data = MANAGER.read_data()
-    if not data:
-        print('No tokens stored...')
-        return
-
-    if group:
-        if group not in data:
-            print(f"[red]Group '{group}' NOT FOUND!")
-            raise typer.Abort()
-
-        tokens = data[group]
-        tree = Tree(group, style='bold')
-        add_token_branches(tree, tokens)
-    else:
-        tree = Tree('Tokens', hide_root=True, style='bold')
-        for group, tokens in sorted(
-            data.items(),
-            key=lambda x: (0, '') if x == 'DEFAULT' else (1, x)
-        ):
-            group_tree = tree.add(group)
-            add_token_branches(group_tree, tokens)
-    print(tree)
