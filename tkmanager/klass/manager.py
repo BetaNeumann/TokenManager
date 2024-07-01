@@ -49,6 +49,10 @@ class Token:
         return False
 
 
+TokenGroup = dict[str, Token]
+TokenFolder = dict[str, TokenGroup]
+
+
 class Manager:
     def __init__(self, key: Optional[bytes] = None, file_location: str = PATH) -> None:
         self._key = key or self.read_key()
@@ -121,15 +125,24 @@ class Manager:
         return token
     
     
-    def read_tokens(self) -> dict[str, dict[str, Token]]:
+    @overload
+    def read_tokens(self, token_group: None = None) -> dict[str, dict[str, Token]]: ...
+    @overload
+    def read_tokens(self, token_group: str) -> dict[str, Token]: ...
+    def read_tokens(self, token_group: str | None = None) -> dict[str, dict[str, Token]] | dict[str, Token]:
+        data = self.read_data()
+        
+        def dict_to_token(tokens: dict[str, dict[str, Any]]) -> dict[str, Token]:
+            return {token_name: Token(**token) for token_name, token in tokens.items()}
+
+        if token_group:
+            if token_group not in data:
+                raise ex.GroupNotFoundError(f"The group '{token_group}' was not found.")
+            return dict_to_token(data[token_group])
         return {
-            group: {
-                token_name: Token(**token)
-                for token_name, token
-                in tokens.items()
-            } 
+            group: dict_to_token(tokens)
             for group, tokens
-            in self.read_data().items()
+            in data.items()
         }
 
 
